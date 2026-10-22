@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wall of Connections</title>
+    <style>
+        :root {
+            --bg-color: #f3f4f6;
+            --text-main: #1f2937;
+            --card-front-bg: #ffffff;
+            --card-front-text: #059669; /* Green font for front */
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            margin: 0 0 0.5rem 0;
+            color: #111827;
+        }
+
+        p.instruction {
+            font-size: clamp(1rem, 2.5vw, 1.25rem);
+            color: #4b5563;
+            margin: 0;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            width: 100%;
+            max-width: 900px;
+            /* Container query setup for fluid typography within cards */
+            container-type: inline-size;
+        }
+
+        /* Card Container (provides 3D perspective) */
+        .card {
+            background-color: transparent;
+            aspect-ratio: 4 / 3;
+            perspective: 1000px;
+            cursor: pointer;
+        }
+
+        /* Card Inner (handles the flip rotation) */
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+            transform-style: preserve-3d;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        /* Front and Back common styles */
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden; /* Safari */
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            /* 1ch padding provides a border equivalent to the width of the letter 'a' in the current font */
+            padding: 1ch;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        /* Front specific styles */
+        .card-front {
+            background-color: var(--card-front-bg);
+            color: var(--card-front-text);
+            border: 2px solid #e5e7eb;
+        }
+
+        /* Back specific styles */
+        .card-back {
+            transform: rotateY(180deg);
+            color: #ffffff;
+        }
+
+        /* Typography sizing */
+        .word {
+            /* Fluid font size based on container width to prevent splitting across lines */
+            font-size: clamp(0.7rem, 2cqi + 0.5rem, 1.5rem);
+            font-weight: 600;
+            text-align: center;
+            line-height: 1.2;
+            word-break: normal;
+        }
+
+        .category-name {
+            font-size: clamp(0.5rem, 1.2cqi + 0.3rem, 0.9rem);
+            font-weight: 400;
+            margin-top: 0.5rem;
+            opacity: 0.9;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Responsive adjustments for smaller screens */
+        @media (max-width: 600px) {
+            .grid-container {
+                gap: 8px;
+            }
+            .card {
+                aspect-ratio: 1 / 1;
+            }
+        }
+
+        /* --- NEW: Success Signal Styles --- */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none; /* Allows clicking through the toast */
+        }
+
+        .toast {
+            background-color: #111827;
+            color: #ffffff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            opacity: 0;
+            transform: translateY(-20px);
+            /* Animates in, stays, then fades out */
+            animation: toastEnter 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, 
+                       toastExit 0.3s ease-in forwards 2.5s;
+        }
+
+        @keyframes toastEnter {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes toastExit {
+            to { opacity: 0; transform: translateY(-20px); }
+        }
+
+        /* Pulse and Glow animation for completed cards */
+        @keyframes popGlow {
+            0% { transform: scale(1); box-shadow: 0 0 0 transparent; }
+            50% { transform: scale(1.06); box-shadow: 0 0 25px currentColor; }
+            100% { transform: scale(1); box-shadow: 0 0 15px currentColor; }
+        }
+
+        /* Applied dynamically via JS when 4 items of a category are flipped */
+        .card.category-complete {
+            z-index: 10; /* Bring to front so glow overlaps other cards */
+        }
+        .card.category-complete .card-inner {
+            animation: popGlow 0.6s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Wall of Connections</h1>
+        <p class="instruction">Can you work out which 4 words belong together?</p>
+    </header>
+
+    <div id="game-board" class="grid-container">
+        <!-- Cards will be injected here by JavaScript -->
+    </div>
+
+    <!-- NEW: Container for success messages -->
+    <div id="toast-container"></div>
+
+    <script>
+        // Data structure containing all words, categories, and colors
+        const gameData = [
+            // LLM Settings (Yellow/Gold)
+            { word: "Temperature", category: "LLM settings", color: "#d4af37" },
+            { word: "Max Tokens", category: "LLM settings", color: "#d4af37" },
+            { word: "Top-P", category: "LLM settings", color: "#d4af37" },
+            { word: "Frequency Penalty", category: "LLM settings", color: "#d4af37" },
+            
+            // Model selection trade-offs (Green)
+            { word: "Capability", category: "Model selection trade-offs", color: "#2e8b57" },
+            { word: "Cost", category: "Model selection trade-offs", color: "#2e8b57" },
+            { word: "Latency", category: "Model selection trade-offs", color: "#2e8b57" },
+            { word: "Governance", category: "Model selection trade-offs", color: "#2e8b57" },
+            
+            // Compliance standards (Blue)
+            { word: "SOC 2", category: "Compliance standards", color: "#4169e1" },
+            { word: "GDPR", category: "Compliance standards", color: "#4169e1" },
+            { word: "HIPAA", category: "Compliance standards", color: "#4169e1" },
+            { word: "ISO", category: "Compliance standards", color: "#4169e1" },
+            
+            // Things you can train (Purple)
+            { word: "Dog", category: "Things you can train", color: "#800080" },
+            { word: "Muscle", category: "Things you can train", color: "#800080" },
+            { word: "Athlete", category: "Things you can train", color: "#800080" },
+            { word: "Model", category: "Things you can train", color: "#800080" }
+        ];
+
+        // Fisher-Yates Shuffle Algorithm to randomize the cards array
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+
+            // While there remain elements to shuffle.
+            while (currentIndex > 0) {
+                // Pick a remaining element.
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+
+                // And swap it with the current element.
+                [array[currentIndex], array[randomIndex]] = [
+                    array[randomIndex], array[currentIndex]];
+            }
+
+            return array;
+        }
+
+        // --- NEW: State and functions for Success Signal ---
+        let completedCategories = new Set();
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            container.appendChild(toast);
+            
+            // Remove toast element from DOM after animation completes (approx 2.8s)
+            setTimeout(() => {
+                toast.remove();
+            }, 2800);
+        }
+
+        function checkCategories() {
+            const allCards = Array.from(document.querySelectorAll('.card'));
+            const flippedCards = allCards.filter(card => card.classList.contains('flipped'));
+            
+            // Reset completion state visually before recalculating
+            allCards.forEach(c => c.classList.remove('category-complete'));
+
+            const counts = {};
+            const cardsByCategory = {};
+
+            // Count flipped cards by their category
+            flippedCards.forEach(card => {
+                const cat = card.dataset.category;
+                counts[cat] = (counts[cat] || 0) + 1;
+                if (!cardsByCategory[cat]) cardsByCategory[cat] = [];
+                cardsByCategory[cat].push(card);
+            });
+
+            // Check for sets of 4 and apply success signals
+            for (const [category, count] of Object.entries(counts)) {
+                if (count === 4) {
+                    // Apply visual pop/glow to the matching 4 cards
+                    cardsByCategory[category].forEach(c => {
+                        c.classList.add('category-complete');
+                    });
+
+                    // Trigger celebratory message if not already triggered for this set
+                    if (!completedCategories.has(category)) {
+                        showToast(`🎉 Category Found: ${category}!`);
+                        completedCategories.add(category);
+                    }
+                } else {
+                    // Allow re-triggering of the toast if user un-flips and re-flips a card later
+                    if (completedCategories.has(category)) {
+                        completedCategories.delete(category);
+                    }
+                }
+            }
+        }
+
+        // Function to create and render the game board
+        function initializeGame() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = ''; // Clear board if re-initializing
+            completedCategories.clear(); // Reset game state
+            
+            // Shuffle the data
+            const shuffledData = shuffle([...gameData]);
+
+            // Create card DOM elements
+            shuffledData.forEach((item) => {
+                // Create outer card container
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                // NEW: Store category and color data on the DOM element 
+                // Color is used by CSS 'currentColor' to dynamically tint the glowing box-shadow
+                card.dataset.category = item.category;
+                card.style.color = item.color; 
+
+                // Toggle 'flipped' class on click
+                card.addEventListener('click', () => {
+                    card.classList.toggle('flipped');
+                    checkCategories(); // NEW: Check for success after every flip
+                });
+
+                // Create inner card (for 3D flip effect)
+                const cardInner = document.createElement('div');
+                cardInner.className = 'card-inner';
+
+                // Create Front of card
+                const cardFront = document.createElement('div');
+                cardFront.className = 'card-front';
+                const frontWord = document.createElement('div');
+                frontWord.className = 'word';
+                frontWord.textContent = item.word;
+                cardFront.appendChild(frontWord);
+
+                // Create Back of card
+                const cardBack = document.createElement('div');
+                cardBack.className = 'card-back';
+                cardBack.style.backgroundColor = item.color; // Set bespoke category color
+                
+                const backWord = document.createElement('div');
+                backWord.className = 'word';
+                backWord.textContent = item.word;
+                
+                const backCategory = document.createElement('div');
+                backCategory.className = 'category-name';
+                backCategory.textContent = item.category;
+
+                cardBack.appendChild(backWord);
+                cardBack.appendChild(backCategory);
+
+                // Assemble card components
+                cardInner.appendChild(cardFront);
+                cardInner.appendChild(cardBack);
+                card.appendChild(cardInner);
+                
+                // Add to game board
+                board.appendChild(card);
+            });
+        }
+
+        // Initialize the game when the DOM is fully loaded
+        window.addEventListener('DOMContentLoaded', initializeGame);
+
+    </script>
+</body>
+</html>
